@@ -99,6 +99,9 @@ async function openResource(resources: StackResourceSummary[], region: string) {
 
   console.log(response.url);
   open(response.url);
+
+  // Recurse until user exits
+  openResource(resources, region);
 }
 
 function getCurrentBranchName(): string {
@@ -161,7 +164,6 @@ async function findStacksByBranchName(
 
     // Open a resource
     await openResource(flattenedResources, region);
-    await findStacksByBranchName(branchName, client, region);
   } catch (error) {
     console.error("An error occurred:", error);
   }
