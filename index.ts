@@ -131,8 +131,6 @@ async function findStacksByBranchName(
 
     spinner.succeed("Stacks found");
 
-    let resources: StackResourceSummary[] = [];
-
     for (const stack of matchingStacks) {
       console.log(`Match found for stack: ${stack.StackName}`);
     }
@@ -163,6 +161,7 @@ async function findStacksByBranchName(
 
     // Open a resource
     await openResource(flattenedResources, region);
+    await findStacksByBranchName(branchName, client, region);
   } catch (error) {
     console.error("An error occurred:", error);
   }
