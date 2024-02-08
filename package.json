@@ -1,0 +1,23 @@
+{
+  "name": "@okeeffed/aws-db",
+  "module": "index.ts",
+  "type": "module",
+  "version": "0.0.1",
+  "bin": {
+    "aws-db": "index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/prompts": "^2.4.9"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudformation": "^3.509.0",
+    "@aws-sdk/credential-provider-ini": "^3.507.0",
+    "open": "^10.0.3",
+    "ora": "^8.0.1",
+    "prompts": "^2.4.2"
+  }
+}
