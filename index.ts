@@ -231,6 +231,7 @@ async function findStacksByMatch(
     await openResource(flattenedResources, region);
   } catch (error) {
     console.error("An error occurred:", error);
+    process.exit(1);
   }
 }
 
@@ -256,99 +257,105 @@ async function listStackResources(
     return resources;
   } catch (error) {
     console.error("Error listing stack resources:", error);
+    process.exit(1);
   }
 }
 
 async function main() {
-  // Check for presence of -p or --profile flag and get its value
-  const profileFlag = hasFlag("-p") || hasFlag("--profile");
-  const profileValue = profileFlag
-    ? getFlagValue("-p") || getFlagValue("--profile")
-    : null;
+  try {
+    // Check for presence of -p or --profile flag and get its value
+    const profileFlag = hasFlag("-p") || hasFlag("--profile");
+    const profileValue = profileFlag
+      ? getFlagValue("-p") || getFlagValue("--profile")
+      : null;
 
-  // Check for presence of -m or --match flag and get its value
-  const matchFlag = hasFlag("-m") || hasFlag("--match");
-  const matchValue = matchFlag
-    ? getFlagValue("-m") || getFlagValue("--match")
-    : null;
+    // Check for presence of -m or --match flag and get its value
+    const matchFlag = hasFlag("-m") || hasFlag("--match");
+    const matchValue = matchFlag
+      ? getFlagValue("-m") || getFlagValue("--match")
+      : null;
 
-  // Use the values if present
-  if (profileFlag && profileValue) {
-    profile = profileValue;
-  } else {
-    const getProfileFromConfigFileResponse = await getProfileFromConfigFile();
+    // Use the values if present
+    if (profileFlag && profileValue) {
+      profile = profileValue;
+    } else {
+      const getProfileFromConfigFileResponse = await getProfileFromConfigFile();
 
-    if (
-      getProfileFromConfigFileResponse.success &&
-      getProfileFromConfigFileResponse.profileNames &&
-      getProfileFromConfigFileResponse.profileNames.length > 0
-    ) {
-      const response = await prompts(
-        {
-          type: "autocomplete",
-          name: "profile",
-          message: "Enter the AWS profile name",
-          suggest,
-          choices: getProfileFromConfigFileResponse.profileNames.map(
-            (name) => ({
-              title: name,
-              value: name,
-            })
-          ),
-        },
-        {
-          onCancel,
-        }
-      );
+      if (
+        getProfileFromConfigFileResponse.success &&
+        getProfileFromConfigFileResponse.profileNames &&
+        getProfileFromConfigFileResponse.profileNames.length > 0
+      ) {
+        const response = await prompts(
+          {
+            type: "autocomplete",
+            name: "profile",
+            message: "Enter the AWS profile name",
+            suggest,
+            choices: getProfileFromConfigFileResponse.profileNames.map(
+              (name) => ({
+                title: name,
+                value: name,
+              })
+            ),
+          },
+          {
+            onCancel,
+          }
+        );
 
-      profile = response.profile;
+        profile = response.profile;
+      } else {
+        const response = await prompts(
+          {
+            type: "text",
+            name: "profile",
+            message: "Enter the AWS profile name",
+          },
+          {
+            onCancel,
+          }
+        );
+
+        profile = response.profile;
+      }
+    }
+
+    if (matchFlag && matchValue) {
+      match = matchValue;
     } else {
       const response = await prompts(
         {
           type: "text",
-          name: "profile",
-          message: "Enter the AWS profile name",
+          name: "match",
+          message: "Enter the text to match against stack names",
         },
         {
           onCancel,
         }
       );
 
-      profile = response.profile;
+      match = response.match;
     }
+
+    // Default to Sydvegas
+    const region = process.env.AWS_REGION || "ap-southeast-2";
+
+    // Create a credentials provider
+    const credentials = fromIni({ profile });
+
+    // Create a CloudFormation client with the specified credentials and region
+    const cloudFormationClient = new CloudFormationClient({
+      region,
+      credentials,
+    });
+
+    const Match = match || getCurrentMatch();
+    findStacksByMatch(Match, cloudFormationClient, region);
+  } catch (error) {
+    console.error("An error occurred:", error);
+    process.exit(1);
   }
-
-  if (matchFlag && matchValue) {
-    match = matchValue;
-  } else {
-    const response = await prompts(
-      {
-        type: "text",
-        name: "match",
-        message: "Enter the text to match against stack names",
-      },
-      {
-        onCancel,
-      }
-    );
-
-    match = response.match;
-  }
-
-  // Default to Sydvegas
-  const region = process.env.AWS_REGION || "ap-southeast-2";
-
-  // Create a credentials provider
-  const credentials = fromIni({ profile });
-
-  // Create a CloudFormation client with the specified credentials and region
-  const cloudFormationClient = new CloudFormationClient({
-    region,
-    credentials,
-  });
-
-  const Match = match || getCurrentMatch();
-  findStacksByMatch(Match, cloudFormationClient, region);
 }
 
 main();
