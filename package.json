@@ -1,10 +1,19 @@
 {
   "name": "@okeeffed/aws-db",
   "module": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
+  "files": [
+    "dist/*.js",
+    "dist/*.d.ts"
+  ],
   "bin": {
-    "aws-db": "index.ts"
+    "aws-db": "dist/index.js"
+  },
+  "scripts": {
+    "build": "bun build --target=node ./index.ts --outfile=dist/index.js"
   },
   "devDependencies": {
     "@types/bun": "latest",

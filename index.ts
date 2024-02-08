@@ -4,7 +4,7 @@ import {
   paginateListStackResources,
 } from "@aws-sdk/client-cloudformation";
 import type { StackResourceSummary } from "@aws-sdk/client-cloudformation";
-import { $ } from "bun";
+import { execSync } from "child_process";
 import { fromIni } from "@aws-sdk/credential-provider-ini";
 import prompts from "prompts";
 import open from "open";
@@ -98,7 +98,7 @@ async function openResource(resources: StackResourceSummary[], region) {
 }
 
 function getCurrentBranchName(): string {
-  return $`git rev-parse --abbrev-ref HEAD`.toString().trim();
+  return execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
 }
 
 async function findStacksByBranchName(
