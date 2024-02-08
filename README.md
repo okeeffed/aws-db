@@ -4,7 +4,14 @@ A helper for debugging CloudFormation deployments without always searching throu
 
 ## How to use
 
-Note: At the moment, it requires a profile from SSO (will be updated soon).
+```bash
+# or pnpx, bunx etc.
+$ npx @okeeffe/aws-dbg@latest
+```
+
+It will prompt you for your profile name and the match you which to target.
+
+## SSO Login
 
 If you need to configure SSO, follow the prompts from the `aws configure sso` screen.
 
@@ -13,11 +20,6 @@ $ aws configure sso
 # Follow prompts until you set the profile
 ```
 
-To run this.
+It will request things like your start URL e.g. `https://your-app.awsapps.com/start`.
 
-```bash
-# or pnpx, bunx etc.
-$ npx @okeeffe/aws-dbg@latest
-```
-
-It will prompt you for your profile name and the match you which to target.
+If your session is expired, you can renew it with `aws sso login`.

@@ -199,7 +199,7 @@ async function findStacksByMatch(
     const spinner = ora("Fetching stacks").start();
     const command = new DescribeStacksCommand({});
     const { Stacks } = await client.send(command).catch((error) => {
-      spinner.fail(`Error fetching stacks: ${error.message}`);
+      spinner.fail(`${chalk.bgRed(`Error fetching stacks:`)} ${error.message}`);
       process.exit(1);
     });
 
