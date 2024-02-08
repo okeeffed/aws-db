@@ -59,7 +59,8 @@ const suggest = async (input: string, choices: Choice[]) => {
 };
 
 /**
- * Add more resources as required. You might need to debug their URLs.
+ * Helper to construct the AWS URLs for different resource types.
+ * TODO: Add more resources as required. You might need to debug their URLs.
  */
 function constructResourceURL(
   resourceType: string = "unknown",
@@ -85,6 +86,9 @@ function constructResourceURL(
   }
 }
 
+/**
+ * Helper to read the AWS config file and extract profile names.
+ */
 async function getProfileFromConfigFile() {
   try {
     // Read the AWS config file
@@ -116,11 +120,17 @@ async function getProfileFromConfigFile() {
   }
 }
 
+/**
+ * Helper to handle user cancellation.
+ */
 const onCancel = () => {
   console.warn(chalk.yellow("Cancelled by user. Exiting..."));
   process.exit(0);
 };
 
+/**
+ * Helper to open a resource.
+ */
 async function openResource(resources: StackResourceSummary[], region: string) {
   let filteredResources = resources
     .filter((resource) =>
@@ -166,8 +176,18 @@ async function openResource(resources: StackResourceSummary[], region: string) {
   openResource(resources, region);
 }
 
+/**
+ * Helper to get the current branch name. This can be useful if there
+ * is no match provided and we want a default.
+ */
 function getCurrentMatch(): string {
-  return execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
+  return (
+    execSync("git rev-parse --abbrev-ref HEAD")
+      .toString()
+      // Remove special characters
+      .replace(/[^a-zA-Z0-9\s]/g, "")
+      .trim()
+  );
 }
 
 async function findStacksByMatch(
@@ -178,7 +198,10 @@ async function findStacksByMatch(
   try {
     const spinner = ora("Fetching stacks").start();
     const command = new DescribeStacksCommand({});
-    const { Stacks } = await client.send(command);
+    const { Stacks } = await client.send(command).catch((error) => {
+      spinner.fail(`Error fetching stacks: ${error.message}`);
+      process.exit(1);
+    });
 
     if (!Stacks || Stacks.length === 0) {
       spinner.fail("No stacks found. Exiting...");
@@ -186,13 +209,40 @@ async function findStacksByMatch(
     }
 
     const matchRegex = new RegExp(match, "i");
-    const matchingStacks = Stacks.filter(
+    let matchingStacks = Stacks.filter(
       (stack) => stack.StackName && matchRegex.test(stack.StackName)
     );
 
     if (matchingStacks.length === 0) {
       spinner.fail("No matching stacks found. Exiting...");
       process.exit();
+    }
+
+    /**
+     * At the moment, we only support opening 8 resources at a time.
+     * All that happens if there are too many is that a request will
+     * likely fail to resolve. I think this is a limitation of AWS.
+     */
+    if (matchingStacks.length > 8) {
+      spinner.warn("More than 8 stacks found. Please refine your search.");
+
+      const response = await prompts(
+        {
+          type: "multiselect",
+          name: "stacks",
+          message: "Pick stacks to open resources for:",
+          choices: matchingStacks.map((stack) => ({
+            // Hack since we know stack.StackName exists
+            title: stack.StackName!,
+            value: stack,
+          })),
+        },
+        {
+          onCancel,
+        }
+      );
+
+      matchingStacks = response.stacks;
     }
 
     spinner.succeed("Stacks found");
@@ -329,6 +379,7 @@ async function main() {
           type: "text",
           name: "match",
           message: "Enter the text to match against stack names",
+          initial: getCurrentMatch(),
         },
         {
           onCancel,
@@ -336,6 +387,15 @@ async function main() {
       );
 
       match = response.match;
+    }
+
+    if (!match) {
+      console.warn(
+        chalk.yellow(
+          "No match provided. Exiting... Please provide a match using the -m or --match flag or provide valid input when prompted."
+        )
+      );
+      process.exit();
     }
 
     // Default to Sydvegas
@@ -350,8 +410,7 @@ async function main() {
       credentials,
     });
 
-    const Match = match || getCurrentMatch();
-    findStacksByMatch(Match, cloudFormationClient, region);
+    findStacksByMatch(match, cloudFormationClient, region);
   } catch (error) {
     console.error("An error occurred:", error);
     process.exit(1);
