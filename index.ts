@@ -11,6 +11,7 @@ import { fromIni } from "@aws-sdk/credential-provider-ini";
 import open from "open";
 import ora from "ora";
 import prompts from "prompts";
+import chalk from "chalk";
 
 let branch = process.env.BRANCH;
 let profile = process.env.AWS_PROFILE;
@@ -50,7 +51,7 @@ function constructResourceURL(
 }
 
 const onCancel = () => {
-  console.log("Cancelled by user. Exiting...");
+  console.warn(chalk.yellow("Cancelled by user. Exiting..."));
   process.exit(0);
 };
 
@@ -97,7 +98,7 @@ async function openResource(resources: StackResourceSummary[], region: string) {
     }
   );
 
-  console.log(response.url);
+  console.log(`${chalk.greenBg("Opening URL")}: ${chalk.green(response.url)}`);
   open(response.url);
 
   // Recurse until user exits
@@ -135,7 +136,9 @@ async function findStacksByBranchName(
     spinner.succeed("Stacks found");
 
     for (const stack of matchingStacks) {
-      console.log(`Match found for stack: ${stack.StackName}`);
+      console.log(
+        `${chalk.greenBg("Match found for stack:")} ${stack.StackName}`
+      );
     }
 
     const matchingStacksSpinner = ora("Fetching resources").start();
