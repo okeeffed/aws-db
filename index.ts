@@ -10,10 +10,14 @@ import { execSync } from "child_process";
 import { fromIni } from "@aws-sdk/credential-provider-ini";
 import open from "open";
 import ora from "ora";
-import prompts from "prompts";
+import prompts, { Choice } from "prompts";
 import chalk from "chalk";
+import ini from "ini";
+import { readFile } from "fs/promises";
+import Fuse from "fuse.js";
 
-let branch = process.env.BRANCH;
+const configFile = `${process.env.HOME}/.aws/config`;
+let match = process.env.match;
 let profile = process.env.AWS_PROFILE;
 
 const resourceTypeAllowList = [
@@ -22,6 +26,37 @@ const resourceTypeAllowList = [
   "AWS::Logs::LogGroup",
   "AWS::ApiGateway::RestApi",
 ];
+
+// Function to check if a flag exists
+function hasFlag(flag: string) {
+  return process.argv.includes(flag);
+}
+
+// Function to get the value following a flag
+function getFlagValue(flag: string) {
+  const index = process.argv.indexOf(flag);
+  if (index !== -1 && index + 1 < process.argv.length) {
+    return process.argv[index + 1];
+  }
+  return null; // Flag not found or no value specified
+}
+
+const suggest = async (input: string, choices: Choice[]) => {
+  const data = choices.map((choice) => choice.title);
+
+  // Initialize Fuse.js with data and fuzzy matching options
+  const fuse = new Fuse(data, {
+    includeScore: true,
+    threshold: 0.5, // Adjust the fuzzy matching threshold as needed
+  });
+
+  if (!input) {
+    return choices;
+  }
+
+  const results = fuse.search(input);
+  return results.map((result) => choices[result.refIndex]);
+};
 
 /**
  * Add more resources as required. You might need to debug their URLs.
@@ -50,6 +85,37 @@ function constructResourceURL(
   }
 }
 
+async function getProfileFromConfigFile() {
+  try {
+    // Read the AWS config file
+    const data = await readFile(configFile, "utf8");
+
+    // Parse the INI data
+    const parsedData = ini.parse(data);
+
+    // Extract profile names
+    const profileNames = Object.keys(parsedData)
+      .filter((key) => key.startsWith("profile "))
+      .map((key) => key.substring(8));
+
+    // Print the profile names
+    return {
+      success: true,
+      profileNames,
+    };
+  } catch (error) {
+    console.warn(
+      chalk.yellow(
+        "An error occurred while reading the AWS config file. Defaulting to input."
+      )
+    );
+
+    return {
+      success: false,
+    };
+  }
+}
+
 const onCancel = () => {
   console.warn(chalk.yellow("Cancelled by user. Exiting..."));
   process.exit(0);
@@ -75,7 +141,7 @@ async function openResource(resources: StackResourceSummary[], region: string) {
     {
       type: "autocomplete",
       name: "url",
-      message: "Pick source file to generate sequence diagram for:",
+      message: "Pick resource to open URL for:",
       choices: filteredResources.map((resource) => ({
         title: `[${resource.ResourceType?.replace("AWS::", "")}]: ${
           resource.LogicalResourceId
@@ -86,31 +152,26 @@ async function openResource(resources: StackResourceSummary[], region: string) {
           region
         ),
       })),
-      suggest: (input, choices) => {
-        const regex = new RegExp(input, "i"); // Case-insensitive matching
-        return Promise.resolve(
-          choices.filter((choice) => regex.test(choice.title))
-        );
-      },
+      suggest,
     },
     {
       onCancel,
     }
   );
 
-  console.log(`${chalk.greenBg("Opening URL")}: ${chalk.green(response.url)}`);
+  console.log(`${chalk.bgGreen("Opening URL")}: ${chalk.green(response.url)}`);
   open(response.url);
 
   // Recurse until user exits
   openResource(resources, region);
 }
 
-function getCurrentBranchName(): string {
+function getCurrentMatch(): string {
   return execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
 }
 
-async function findStacksByBranchName(
-  branchName: string,
+async function findStacksByMatch(
+  match: string,
   client: CloudFormationClient,
   region: string
 ): Promise<void> {
@@ -124,8 +185,9 @@ async function findStacksByBranchName(
       process.exit();
     }
 
+    const matchRegex = new RegExp(match, "i");
     const matchingStacks = Stacks.filter(
-      (stack) => stack.StackName && stack.StackName.includes(branchName)
+      (stack) => stack.StackName && matchRegex.test(stack.StackName)
     );
 
     if (matchingStacks.length === 0) {
@@ -137,7 +199,7 @@ async function findStacksByBranchName(
 
     for (const stack of matchingStacks) {
       console.log(
-        `${chalk.greenBg("Match found for stack:")} ${stack.StackName}`
+        `${chalk.bgGreen("Match found for stack:")} ${stack.StackName}`
       );
     }
 
@@ -163,7 +225,7 @@ async function findStacksByBranchName(
       matchingStacksSpinner.fail("No resources found for stack");
       process.exit();
     }
-    matchingStacksSpinner.succeed(`Resources found for branch`);
+    matchingStacksSpinner.succeed(`Resources found for match`);
 
     // Open a resource
     await openResource(flattenedResources, region);
@@ -198,34 +260,79 @@ async function listStackResources(
 }
 
 async function main() {
-  if (!profile) {
-    const response = await prompts(
-      {
-        type: "text",
-        name: "profile",
-        message: "Enter the AWS profile name",
-      },
-      {
-        onCancel,
-      }
-    );
+  // Check for presence of -p or --profile flag and get its value
+  const profileFlag = hasFlag("-p") || hasFlag("--profile");
+  const profileValue = profileFlag
+    ? getFlagValue("-p") || getFlagValue("--profile")
+    : null;
 
-    profile = response.profile;
+  // Check for presence of -m or --match flag and get its value
+  const matchFlag = hasFlag("-m") || hasFlag("--match");
+  const matchValue = matchFlag
+    ? getFlagValue("-m") || getFlagValue("--match")
+    : null;
+
+  // Use the values if present
+  if (profileFlag && profileValue) {
+    profile = profileValue;
+  } else {
+    const getProfileFromConfigFileResponse = await getProfileFromConfigFile();
+
+    if (
+      getProfileFromConfigFileResponse.success &&
+      getProfileFromConfigFileResponse.profileNames &&
+      getProfileFromConfigFileResponse.profileNames.length > 0
+    ) {
+      const response = await prompts(
+        {
+          type: "autocomplete",
+          name: "profile",
+          message: "Enter the AWS profile name",
+          suggest,
+          choices: getProfileFromConfigFileResponse.profileNames.map(
+            (name) => ({
+              title: name,
+              value: name,
+            })
+          ),
+        },
+        {
+          onCancel,
+        }
+      );
+
+      profile = response.profile;
+    } else {
+      const response = await prompts(
+        {
+          type: "text",
+          name: "profile",
+          message: "Enter the AWS profile name",
+        },
+        {
+          onCancel,
+        }
+      );
+
+      profile = response.profile;
+    }
   }
 
-  if (!branch) {
+  if (matchFlag && matchValue) {
+    match = matchValue;
+  } else {
     const response = await prompts(
       {
         type: "text",
-        name: "branch",
-        message: "Enter the branch name",
+        name: "match",
+        message: "Enter the text to match against stack names",
       },
       {
         onCancel,
       }
     );
 
-    branch = response.branch;
+    match = response.match;
   }
 
   // Default to Sydvegas
@@ -240,8 +347,8 @@ async function main() {
     credentials,
   });
 
-  const branchName = branch || getCurrentBranchName();
-  findStacksByBranchName(branchName, cloudFormationClient, region);
+  const Match = match || getCurrentMatch();
+  findStacksByMatch(Match, cloudFormationClient, region);
 }
 
 main();

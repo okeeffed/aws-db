@@ -1,15 +1,23 @@
-# cf-list
+# AWS Debug
 
-To install dependencies:
+A helper for debugging CloudFormation deployments without always searching through CloudFormation.
+
+## How to use
+
+Note: At the moment, it requires a profile from SSO (will be updated soon).
+
+If you need to configure SSO, follow the prompts from the `aws configure sso` screen.
 
 ```bash
-bun install
+$ aws configure sso
+# Follow prompts until you set the profile
 ```
 
-To run:
+To run this.
 
 ```bash
-bun run index.ts
+# or pnpx, bunx etc.
+$ npx @okeeffe/aws-dbg@latest
 ```
 
-This project was created using `bun init` in bun v1.0.25. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+It will prompt you for your profile name and the match you which to target.
