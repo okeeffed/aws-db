@@ -1,26 +1,27 @@
 {
   "name": "@okeeffed/aws-db",
-  "module": "index.ts",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "files": [
     "dist/*.js",
     "dist/*.d.ts"
   ],
-  "bin": {
-    "aws-db": "dist/index.js"
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
   },
+  "bin": "dist/index.js",
   "scripts": {
-    "build": "bun build --target=node ./index.ts --outfile=dist/index.js"
+    "build": "tsup --format cjs,esm --clean --minify"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/prompts": "^2.4.9"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
+    "@tsconfig/node20": "^20.1.2",
+    "@types/prompts": "^2.4.9",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "@aws-sdk/client-cloudformation": "^3.509.0",

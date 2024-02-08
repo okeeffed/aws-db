@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import {
   CloudFormationClient,
   DescribeStacksCommand,
@@ -6,9 +8,9 @@ import {
 import type { StackResourceSummary } from "@aws-sdk/client-cloudformation";
 import { execSync } from "child_process";
 import { fromIni } from "@aws-sdk/credential-provider-ini";
-import prompts from "prompts";
 import open from "open";
 import ora from "ora";
+import prompts from "prompts";
 
 let branch = process.env.BRANCH;
 let profile = process.env.AWS_PROFILE;
@@ -47,7 +49,12 @@ function constructResourceURL(
   }
 }
 
-async function openResource(resources: StackResourceSummary[], region) {
+const onCancel = () => {
+  console.log("Cancelled by user. Exiting...");
+  process.exit(0);
+};
+
+async function openResource(resources: StackResourceSummary[], region: string) {
   let filteredResources = resources
     .filter((resource) =>
       resourceTypeAllowList.includes(resource.ResourceType!)
@@ -86,10 +93,7 @@ async function openResource(resources: StackResourceSummary[], region) {
       },
     },
     {
-      onCancel: () => {
-        console.log("Cancelled by user. Exiting...");
-        process.exit(0);
-      },
+      onCancel,
     }
   );
 
@@ -191,21 +195,31 @@ async function listStackResources(
 
 async function main() {
   if (!profile) {
-    const response = await prompts({
-      type: "text",
-      name: "profile",
-      message: "Enter the AWS profile name",
-    });
+    const response = await prompts(
+      {
+        type: "text",
+        name: "profile",
+        message: "Enter the AWS profile name",
+      },
+      {
+        onCancel,
+      }
+    );
 
     profile = response.profile;
   }
 
   if (!branch) {
-    const response = await prompts({
-      type: "text",
-      name: "branch",
-      message: "Enter the branch name",
-    });
+    const response = await prompts(
+      {
+        type: "text",
+        name: "branch",
+        message: "Enter the branch name",
+      },
+      {
+        onCancel,
+      }
+    );
 
     branch = response.branch;
   }
